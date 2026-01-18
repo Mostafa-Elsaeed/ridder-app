@@ -1,0 +1,7 @@
+{
+  "name": "SwiftEscrow Delivery",
+  "description": "A high-trust delivery platform where stores and delivery partners use an escrow wallet system to ensure safe transactions for both products and delivery fees.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
