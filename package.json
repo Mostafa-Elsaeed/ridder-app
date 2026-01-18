@@ -14,7 +14,8 @@
     "react-dom": "^19.2.3",
     "typeorm": "^0.3.28",
     "@nestjs/typeorm": "^11.0.0",
-    "@nestjs/common": "^11.1.12"
+    "@nestjs/common": "^11.1.12",
+    "@nestjs/core": "^11.1.12"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

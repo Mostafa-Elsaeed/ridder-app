@@ -23,7 +23,6 @@ const App: React.FC = () => {
         const fetchedWallet = await api.fetchWallet(user.id);
         setWallet(fetchedWallet);
 
-        // Fetch bids for all user's orders to keep UI reactive
         const allBids: Bid[] = [];
         for (const order of fetchedOrders) {
            const orderBids = await api.fetchBids(order.id);
@@ -32,78 +31,62 @@ const App: React.FC = () => {
         setBids(allBids);
       }
     } catch (err) {
-      // Errors are caught and handled within the API service fallback
-      // so this block should remain quiet unless critical.
+      console.debug("Sync error:", err);
     }
   }, [user]);
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 10000); // Less frequent polling to reduce console noise
+    const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
   }, [loadData]);
 
-  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
   const handleLogout = () => {
     setUser(null);
     setWallet({ balance: 0, escrow: 0 });
   };
 
-  const handleAcceptBid = useCallback(async (orderId: string, bidId: string) => {
+  const handleAcceptBid = async (orderId: string, bidId: string) => {
     const updatedOrder = await api.acceptBid(orderId, bidId);
     setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
-  }, []);
+  };
 
-  const handleDeposit = useCallback(async (orderId: string) => {
+  const handleDeposit = async (orderId: string) => {
     if (!user) return;
     const updatedOrder = await api.deposit(orderId, user.id);
     setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
     const updatedWallet = await api.fetchWallet(user.id);
     setWallet(updatedWallet);
-  }, [user]);
+  };
 
-  const handleStepForward = useCallback(async (orderId: string, nextStatus: OrderStatus) => {
+  const handleStepForward = async (orderId: string, nextStatus: OrderStatus) => {
     const updatedOrder = await api.updateStatus(orderId, nextStatus);
     setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
-  }, []);
+  };
 
-  const handleConfirmReceipt = useCallback(async (orderId: string) => {
+  const handleConfirmReceipt = async (orderId: string) => {
     if (!user) return;
     const updatedOrder = await api.confirmReceipt(orderId, user.id);
     setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
     const updatedWallet = await api.fetchWallet(user.id);
     setWallet(updatedWallet);
-  }, [user]);
+  };
 
-  const handleSubmitReview = useCallback(async (orderId: string, role: UserRole, rating: number, reviewText: string) => {
-    // In demo mode, we update locally
+  const handleSubmitReview = (orderId: string, role: UserRole, rating: number, text: string) => {
     setOrders(prev => prev.map(o => {
       if (o.id === orderId) {
         return role === UserRole.STORE 
-          ? { ...o, rating, reviewText, reviewSubmitted: true }
-          : { ...o, riderRating: rating, riderReviewText: reviewText, riderReviewSubmitted: true };
+          ? { ...o, rating, reviewText: text, reviewSubmitted: true }
+          : { ...o, riderRating: rating, riderReviewText: text, riderReviewSubmitted: true };
       }
       return o;
     }));
-  }, []);
-
-  const addOrder = useCallback(async (newOrderData: any) => {
-    const created = await api.createOrder(newOrderData);
-    setOrders(prev => [created, ...prev]);
-  }, []);
-
-  const addBid = useCallback(async (newBidData: any) => {
-    const created = await api.placeBid(newBidData);
-    setBids(prev => {
-      const filtered = prev.filter(b => b.orderId !== created.orderId || b.deliveryGuyId !== created.deliveryGuyId);
-      return [...filtered, created];
-    });
-  }, []);
+  };
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#020617] transition-colors">
-        <Navbar user={null} available={0} escrow={0} onLogout={handleLogout} theme={theme} onToggleTheme={toggleTheme} />
+      <div className="min-h-screen bg-[#020617]">
+        <Navbar user={null} available={0} escrow={0} onLogout={handleLogout} theme={theme} onToggleTheme={() => setTheme(t => t === 'light' ? 'dark' : 'light')} />
         <Auth onLogin={setUser} />
       </div>
     );
@@ -111,42 +94,27 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#020617] text-white flex flex-col">
-      <Navbar 
-        user={user} 
-        available={wallet.balance} 
-        escrow={wallet.escrow} 
-        onLogout={handleLogout} 
-        theme={theme} 
-        onToggleTheme={toggleTheme} 
-      />
-      
+      <Navbar user={user} available={wallet.balance} escrow={wallet.escrow} onLogout={handleLogout} theme={theme} onToggleTheme={() => setTheme(t => t === 'light' ? 'dark' : 'light')} />
       <main className="flex-1 px-4 md:px-8 py-10">
         {user.role === UserRole.STORE ? (
           <StoreDashboard 
-            currentUser={user}
-            orders={orders} 
-            bids={bids} 
-            onAddOrder={addOrder} 
-            onAcceptBid={handleAcceptBid} 
-            onDeposit={handleDeposit}
+            currentUser={user} orders={orders} bids={bids} 
+            onAddOrder={async data => { const c = await api.createOrder(data); setOrders(p => [c, ...p]); }} 
+            onAcceptBid={handleAcceptBid} onDeposit={handleDeposit} 
             onConfirmReceipt={handleConfirmReceipt}
             onSubmitReview={(id, r, t) => handleSubmitReview(id, UserRole.STORE, r, t)}
           />
         ) : (
           <DeliveryDashboard 
-            currentUser={user}
-            orders={orders} 
-            bids={bids} 
-            onAddBid={addBid}
-            onDeposit={handleDeposit}
-            onStepForward={handleStepForward}
+            currentUser={user} orders={orders} bids={bids} 
+            onAddBid={async data => { const c = await api.placeBid(data); setBids(p => [...p, c]); }}
+            onDeposit={handleDeposit} onStepForward={handleStepForward}
             onSubmitReview={(id, r, t) => handleSubmitReview(id, UserRole.DELIVERY, r, t)}
           />
         )}
       </main>
-
       <footer className="py-12 border-t border-slate-900 text-center text-slate-600 text-[11px] font-black uppercase tracking-[0.3em]">
-        &copy; 2024 SwiftEscrow Delivery. Secure Escrow Protocol Active.
+        &copy; 2024 SwiftEscrow Delivery. Secure Protocol Isolation.
       </footer>
     </div>
   );
